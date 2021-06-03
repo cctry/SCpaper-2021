@@ -36,6 +36,16 @@ template <typename ACT_OP_t> void act(half *data, int size) {
     }
 }
 
+#include <iostream>
+inline void prt_vec(half *arr) {
+    // constexpr auto size = 4;
+    // std::vector<half> hvec(size);
+    // cudaMemcpy(hvec.data(), arr, sizeof(half) * size, cudaMemcpyDeviceToHost);
+    // std::cout << __half2float(hvec[0]) << "," << __half2float(hvec[1]) << ","
+    //           << __half2float(hvec[2]) << "," << __half2float(hvec[3]) << ","
+    //           << std::endl;
+}
+
 template <typename _config> class Encoder {
     using config = _config;
     using attn_t = Attention<typename config::attn_config>;
@@ -69,12 +79,20 @@ template <typename _config> class Encoder {
           temp_LN(model->seq_len * model->emdim) {}
 
     void forward(half *out, half *src) {
+        prt_vec(src);
         attn->forward(temp_attn.get(), src, src, src);
+        prt_vec(temp_attn.get());
         LN1->forward(temp_LN.get(), temp_attn.get(), src, model->seq_len);
+        prt_vec(temp_LN.get());
         linear1->forward(temp_linear.get(), temp_LN.get());
-        // act<ACT_OP_t>(temp_linear.get(), model->dimFF * model->seq_len);
+        prt_vec(temp_linear.get());
+        act<ACT_OP_t>(temp_linear.get(), model->dimFF * model->seq_len);
+        prt_vec(temp_linear.get());
         linear2->forward(temp_attn.get(), temp_linear.get());
+        prt_vec(temp_attn.get());
         LN2->forward(out, temp_attn.get(), temp_LN.get(), model->seq_len);
+        prt_vec(out);
+        std::cout << "======" << std::endl;
     }
 };
 

@@ -1,0 +1,9 @@
+/build
+/.vscode
+*.row
+.DS_Store
+*.pt
+*.npy
+*.npz
+/.data
+/npyfile/*

@@ -246,8 +246,10 @@ class Attention<_config, std::enable_if_t<_config::isSingleKernel>> {
     void forward(half *out, half *query, half *key, half *value) {
         assert(query == key && key == value);
         linearQKV->forward(mat_qkv->get(), query);
-        auto smem_size =
-            sizeof(half) * (16 * (model->kdim / model->nhead + model->seq_len));
+        constexpr auto FP16_skew = 16;
+    auto tempQ_size = 16 * ((model->kdim / model->nhead) + FP16_skew);
+    auto temp_row_size = 16 * (model->seq_len + FP16_skew);
+    auto smem_size = sizeof(half) * (tempQ_size + temp_row_size);
         int num_thd, _num_blk;
         cudaChk(cudaOccupancyMaxPotentialBlockSize(
             &_num_blk, &num_thd, __kernel_multi_head_full_single_kernel,

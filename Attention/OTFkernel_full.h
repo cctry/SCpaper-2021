@@ -1,4 +1,5 @@
 #pragma once
+#include "kernels.h"
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
 #include <cooperative_groups/reduce.h>
@@ -6,7 +7,6 @@
 #include <cuda_fp16.hpp>
 #include <mma.hpp>
 #include <utils.h>
-#include "kernels.h"
 
 namespace cg = cooperative_groups;
 

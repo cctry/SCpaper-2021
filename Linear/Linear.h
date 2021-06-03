@@ -142,6 +142,8 @@ template <> class Linear<tile_mat> {
 
     Linear(int _in_size, int _out_size, const tile_mat &w, const half *b,
            int _size);
+    Linear(int _in_size, int _out_size, const tile_mat &w, culib::CUDA_ptr<half>& b,
+           int _size);
     Linear(int _in_size, int _out_size, tile_mat &&w, const half *b, int _size);
     Linear(Linear<tile_mat> &&_linear);
     void forward(half *output, const half *const input,

@@ -69,6 +69,11 @@ Linear<tile_mat>::Linear(int _in_size, int _out_size, const tile_mat &w,
     : weight(w), bias(b, _out_size), in_size(_in_size), out_size(_out_size),
       size(_size) {}
 
+Linear<tile_mat>::Linear(int _in_size, int _out_size, const tile_mat &w,
+                         culib::CUDA_ptr<half> &b, int _size)
+    : weight(w), bias(b), in_size(_in_size), out_size(_out_size),
+      size(_size) {}
+
 Linear<tile_mat>::Linear(int _in_size, int _out_size, tile_mat &&w,
                          const half *b, int _size)
     : weight(std::move(w)), bias(b, _out_size), in_size(_in_size),
@@ -280,11 +285,11 @@ __global__ void __kernel_blk_mmul_blk_bias_smem_blk_skew(
     cta.sync();
     // reduce across warp
     int e = cta.thread_rank();
-    auto base = &smem[e];
+    auto base = &smem[e/16 *tile_ldm + (e%16) ];
     auto sum = *base;
 #pragma unroll
-    for (int i = 0; i < num_warp; i++) {
-        sum += base[i << 8];
+    for (int i = 1; i < num_warp; i++) {
+        sum += base[16*i];
     }
     *base = sum;
     cta.sync();

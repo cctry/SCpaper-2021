@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(ETrans CUDA CXX)
+project(ET CUDA CXX)
 FIND_PACKAGE(OpenMP REQUIRED)
 if (NOT DEFINED CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 17)
@@ -31,24 +31,6 @@ add_subdirectory(SkipLayerNorm)
 add_subdirectory(Encoder)
 add_subdirectory(Fused_attention)
 add_subdirectory(test)
-add_executable(ETrans main.cu)
-target_link_libraries(ETrans
-    culib
-    linear
-    attention
-    layernorm
-    mat_type
-    skiplayernorm
-)
-
-
-add_executable(test_LN LN_test.cu)
-target_link_libraries(test_LN
-    culib
-    layernorm
-    skiplayernorm
-)
-
-
+add_subdirectory(example)
 
 

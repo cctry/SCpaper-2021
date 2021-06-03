@@ -6,4 +6,5 @@ struct Model_t{
     int nhead;
     int dimFF;
     int emdim;
+    int nlayer;
 };

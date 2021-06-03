@@ -7,12 +7,12 @@
 #include <utils.h>
 namespace cg = cooperative_groups;
 
-__global__ void
-__kernel_multi_head_full_single_kernel(const half *__restrict__ Q, const half *__restrict__ K,
-                         const half *__restrict__ V, half *__restrict__ Z,
-                         const int kdim, const int vdim, const int seq_len,
-                         const int num_head, const half *__restrict__ mask,
-                         const int ldm) {
+__global__ void __kernel_multi_head_full_single_kernel(
+    const half *__restrict__ Q, const half *__restrict__ K,
+    const half *__restrict__ V, half *__restrict__ Z, const int kdim,
+    const int vdim, const int seq_len, const int num_head,
+    const half *__restrict__ mask, const int ldm) {
+    constexpr int FP16_skew = 16;
     // blockIdx.x: block row id
     // blockIdx.y: head_id
     using frag_t = culib::mma::mma_t<16, 16, 16>;
@@ -25,30 +25,32 @@ __kernel_multi_head_full_single_kernel(const half *__restrict__ Q, const half *_
     const auto head_dim = kdim / num_head;
     auto Q_ptr = &Q[16 * blockIdx.x * ldm + head_dim * blockIdx.y];
     auto temp_Q = smem;
+    const auto ldQ = head_dim + FP16_skew;
+    const auto ldRow = seq_len + FP16_skew;
     const half scale = hsqrt(__int2half_rn(head_dim));
     for (int r = warp_id; r < 16; r += num_warp) {
-        auto dst = &temp_Q[r * head_dim];
+        auto dst = &temp_Q[r * ldQ];
         auto src = &Q_ptr[r * ldm];
         cg::memcpy_async(warp, dst, src, sizeof(half) * head_dim);
-        // auto dst2 = reinterpret_cast<half2 *>(dst);
-        // for (int i = lane_id; i < head_dim / 2; i += 32) {
-        //     dst2[i] = __h2div(dst2[i], half2{scale, scale});
-        // }
+        auto dst2 = reinterpret_cast<half2 *>(dst);
+        for (int i = lane_id; i < head_dim / 2; i += 32) {
+            dst2[i] = __h2div(dst2[i], half2{scale, scale});
+        }
     }
     cta.sync();
     frag_t::a_t<wmma::row_major> a_frag;
     frag_t::b_t<wmma::col_major> b_frag;
     frag_t::c_t<half> c_frag;
-    auto temp_row = &smem[16 * head_dim];
+    auto temp_row = &smem[16 * ldQ];
     for (int KR = warp_id; KR < seq_len / 16; KR += num_warp) {
         auto K_ptr = &K[16 * KR * ldm + head_dim * blockIdx.y];
         wmma::fill_fragment(c_frag, half_zero);
         for (int i = 0; i < head_dim; i += 16) {
-            wmma::load_matrix_sync(a_frag, smem + i, head_dim);
+            wmma::load_matrix_sync(a_frag, smem + i, ldQ);
             wmma::load_matrix_sync(b_frag, K_ptr + i, ldm);
             wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
         }
-        wmma::store_matrix_sync(temp_row + KR * 16, c_frag, seq_len,
+        wmma::store_matrix_sync(temp_row + KR * 16, c_frag, ldRow,
                                 wmma::mem_row_major);
     }
     cta.sync();
@@ -56,12 +58,16 @@ __kernel_multi_head_full_single_kernel(const half *__restrict__ Q, const half *_
     const auto mask_base =
         reinterpret_cast<const half2 *>(&mask[(blockIdx.x * 16) * seq_len]);
     auto temp_row_2 = reinterpret_cast<half2 *>(temp_row);
-    for (int i = threadIdx.x; i < seq_len * 8; i += blockDim.x) {
-        temp_row_2[i] += mask_base[i];
+    const auto ldRow2 = ldRow >> 1;
+    const auto seq_len2 = seq_len >> 1;
+    for (int i = threadIdx.x; i < seq_len2 * 16; i += blockDim.x) {
+        const auto r = i / seq_len2;
+        const auto c = i % seq_len2;
+        temp_row_2[r * ldRow2 + c] += mask_base[i];
     }
     cta.sync();
     for (int row = warp_id; row < 16; row += num_warp) {
-        auto row_ptr = temp_row + row * seq_len;
+        auto row_ptr = temp_row + row * ldRow;
         // find the max
         half val_max = half_zero, temp;
         for (auto i = warp.thread_rank(); i < seq_len; i += warp.size()) {
@@ -91,7 +97,7 @@ __kernel_multi_head_full_single_kernel(const half *__restrict__ Q, const half *_
         wmma::fill_fragment(c_frag, half_zero);
         for (int i = 0; i < seq_len; i += 16) {
             auto V_ptr = &V[ldm * i + blockIdx.y * vhead_dim + VC * 16];
-            wmma::load_matrix_sync(a_frag, temp_row + i, seq_len);
+            wmma::load_matrix_sync(a_frag, temp_row + i, ldRow);
             wmma::load_matrix_sync(b_frag, V_ptr, vdim);
             wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
         }
