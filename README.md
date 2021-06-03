@@ -33,6 +33,7 @@ git submodule update
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
+make
 ```
 ## Examples
 There are two examples of using E.T.
