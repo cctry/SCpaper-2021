@@ -1,0 +1,3 @@
+[submodule "SCpaper-2021-pruning"]
+	path = SCpaper-2021-pruning
+	url = https://github.com/cctry/SCpaper-2021-pruning.git
